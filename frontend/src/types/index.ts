@@ -119,6 +119,7 @@ export interface Subtask {
   deadline?: string
   created_at: string
   updated_at: string
+  submissions?: Submission[]
 }
 
 export type SubtaskType = 
@@ -141,7 +142,7 @@ export interface Submission {
   id: string
   subtask_id: string
   submitted_by: string
-  content_summary?: string
+  content_summary: string
   artifact_ipfs_hash?: string
   artifact_type?: string
   artifact_on_chain_hash?: string
@@ -152,6 +153,7 @@ export interface Submission {
   reviewed_at?: string
   payment_tx_hash?: string
   payment_amount_cngn?: string
+  submitted_at: string
   created_at: string
 }
 
