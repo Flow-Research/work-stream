@@ -1,4 +1,5 @@
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
+import toast from 'react-hot-toast'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 
@@ -7,9 +8,9 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000,
 })
 
-// Add auth token to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('flow-auth')
   if (token) {
@@ -18,12 +19,36 @@ api.interceptors.request.use((config) => {
       if (parsed.state?.token) {
         config.headers.Authorization = `Bearer ${parsed.state.token}`
       }
-    } catch (e) {
+    } catch {
       // Invalid token format
     }
   }
   return config
 })
+
+api.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    if (error.code === 'ERR_NETWORK') {
+      toast.error('Network error. Please check your connection.')
+    } else if (error.code === 'ECONNABORTED') {
+      toast.error('Request timed out. Please try again.')
+    } else if (error.response) {
+      const status = error.response.status
+      
+      if (status === 401) {
+        localStorage.removeItem('flow-auth')
+        toast.error('Session expired. Please reconnect your wallet.')
+      } else if (status === 403) {
+        toast.error('You do not have permission to perform this action.')
+      } else if (status >= 500) {
+        toast.error('Server error. Please try again later.')
+      }
+    }
+    
+    return Promise.reject(error)
+  }
+)
 
 // Auth service
 export const authService = {
