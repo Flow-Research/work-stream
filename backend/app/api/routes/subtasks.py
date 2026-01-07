@@ -15,6 +15,7 @@ from app.models.user import User
 from app.schemas.subtask import (
     SubtaskClaimRequest,
     SubtaskListResponse,
+    SubtaskRejectRequest,
     SubtaskResponse,
 )
 from app.schemas.submission import SubmissionResponse
@@ -112,9 +113,9 @@ async def get_subtask(
 @router.post("/{subtask_id}/claim", response_model=SubtaskResponse)
 async def claim_subtask(
     subtask_id: UUID,
+    db: DbSession,
+    current_user: CurrentUser,
     claim_request: Optional[SubtaskClaimRequest] = None,
-    current_user: CurrentUser = None,
-    db: DbSession = None,
 ) -> SubtaskResponse:
     """
     Claim a subtask for work.
@@ -254,10 +255,10 @@ async def unclaim_subtask(
 @router.post("/{subtask_id}/submit", response_model=SubmissionResponse)
 async def submit_work(
     subtask_id: UUID,
+    db: DbSession,
+    current_user: CurrentUser,
     content_summary: str = Form(...),
     artifact: Optional[UploadFile] = File(None),
-    current_user: CurrentUser = None,
-    db: DbSession = None,
 ) -> SubmissionResponse:
     """
     Submit work for a subtask.
@@ -357,9 +358,9 @@ async def submit_work(
 @router.post("/{subtask_id}/approve", response_model=SubtaskResponse)
 async def approve_subtask(
     subtask_id: UUID,
+    db: DbSession,
+    current_user: CurrentUser,
     review_notes: Optional[str] = None,
-    current_user: CurrentUser = None,
-    db: DbSession = None,
 ) -> SubtaskResponse:
     """
     Approve a submitted subtask.
@@ -442,22 +443,10 @@ async def approve_subtask(
 @router.post("/{subtask_id}/reject", response_model=SubtaskResponse)
 async def reject_subtask(
     subtask_id: UUID,
-    review_notes: str,
-    current_user: CurrentUser,
+    reject_data: SubtaskRejectRequest,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> SubtaskResponse:
-    """
-    Reject a submitted subtask.
-    
-    Args:
-        subtask_id: The subtask ID
-        review_notes: Required review notes explaining rejection
-        current_user: The authenticated user
-        db: Database session
-        
-    Returns:
-        The rejected subtask
-    """
     result = await db.execute(select(Subtask).where(Subtask.id == subtask_id))
     subtask = result.scalar_one_or_none()
     
@@ -470,6 +459,12 @@ async def reject_subtask(
     # Get parent task to check authorization
     task_result = await db.execute(select(Task).where(Task.id == subtask.task_id))
     task = task_result.scalar_one_or_none()
+    
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
     
     if task.client_id != current_user.id and not current_user.is_admin:
         raise HTTPException(
@@ -496,7 +491,7 @@ async def reject_subtask(
         submission.status = "rejected"
         submission.reviewed_by = current_user.id
         submission.reviewed_at = datetime.utcnow()
-        submission.review_notes = review_notes
+        submission.review_notes = reject_data.review_notes
     
     subtask.status = "rejected"
     

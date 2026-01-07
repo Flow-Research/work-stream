@@ -77,6 +77,25 @@ class SubtaskClaimRequest(BaseModel):
     )
 
 
+class SubtaskReviewRequest(BaseModel):
+    """Request schema for approving or rejecting a subtask."""
+    
+    review_notes: Optional[str] = Field(
+        None,
+        description="Notes explaining the review decision",
+    )
+
+
+class SubtaskRejectRequest(BaseModel):
+    """Request schema for rejecting a subtask (review_notes required)."""
+    
+    review_notes: str = Field(
+        ...,
+        min_length=1,
+        description="Notes explaining why the submission was rejected",
+    )
+
+
 class SubtaskResponse(BaseModel):
     """Response schema for subtask data."""
     

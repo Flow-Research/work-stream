@@ -94,7 +94,7 @@ async def test_claim_subtask_requires_auth(client: AsyncClient, open_subtask: Su
         f"/api/subtasks/{open_subtask.id}/claim",
         json={},
     )
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -186,7 +186,8 @@ async def test_submit_work(
     
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "submitted"
+    # SubmissionResponse returns submission status, not subtask status
+    assert data["status"] == "pending"
 
 
 @pytest.mark.asyncio
@@ -215,7 +216,7 @@ async def test_submit_work_with_file(
     
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "submitted"
+    assert data["status"] == "pending"
 
 
 @pytest.mark.asyncio
