@@ -16,6 +16,7 @@ from app.schemas.task import (
     TaskResponse,
     TaskUpdate,
 )
+from app.services.blockchain import BlockchainService
 
 router = APIRouter()
 
@@ -174,6 +175,21 @@ async def fund_task(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Task is not in draft status",
         )
+    
+    blockchain = BlockchainService()
+    if blockchain.is_configured():
+        tx_info = blockchain.verify_transaction(fund_request.escrow_tx_hash)
+        if not tx_info:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Could not verify transaction on blockchain",
+            )
+        if tx_info.get("status") != 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Transaction failed on blockchain",
+            )
+        task.escrow_contract_task_id = blockchain.get_task_counter()
     
     task.escrow_tx_hash = fund_request.escrow_tx_hash
     task.status = "funded"
