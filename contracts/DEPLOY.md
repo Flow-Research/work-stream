@@ -70,9 +70,9 @@ CNGN_CONTRACT_ADDRESS=0x...
 
 | Contract | Address | Network |
 |----------|---------|---------|
-| MockCNGN | TBD | Base Sepolia |
-| FlowEscrow | TBD | Base Sepolia |
-| FlowArtifactRegistry | TBD | Base Sepolia |
+| MockCNGN | `0xfdf794bfBC24bCc7aE733a33a78CE16e71024821` | Base Sepolia |
+| FlowEscrow | `0xf10D75Bd61eA5071677aE209FD3a9aA334Ac14FF` | Base Sepolia |
+| FlowArtifactRegistry | `0x120ddd1Be4534d2Bd24009b913eB3057a2251751` | Base Sepolia |
 
 ## Contract ABIs
 
