@@ -5,6 +5,7 @@ import { taskService, subtaskService } from '../services/api'
 import { useAuthStore } from '../stores/auth'
 import toast from 'react-hot-toast'
 import SubmissionModal from '../components/SubmissionModal'
+import ReviewModal from '../components/ReviewModal'
 import type { SubtaskBrief, SubtaskStatus, SubtaskType, ReferenceItem, Subtask, DeliverableItem } from '../types'
 
 const subtaskTypeLabels: Record<SubtaskType, string> = {
@@ -24,6 +25,21 @@ export default function TaskDetail() {
   const [expandedSubtask, setExpandedSubtask] = useState<string | null>(null)
   const [subtaskDetails, setSubtaskDetails] = useState<Record<string, Subtask>>({})
   const [submissionModal, setSubmissionModal] = useState<{ isOpen: boolean; subtaskId: string; subtaskTitle: string }>({
+    isOpen: false,
+    subtaskId: '',
+    subtaskTitle: '',
+  })
+  const [reviewModal, setReviewModal] = useState<{
+    isOpen: boolean
+    subtaskId: string
+    subtaskTitle: string
+    submission?: {
+      content_summary: string
+      artifact_ipfs_hash?: string
+      artifact_type?: string
+      submitted_at: string
+    }
+  }>({
     isOpen: false,
     subtaskId: '',
     subtaskTitle: '',
@@ -364,6 +380,29 @@ export default function TaskDetail() {
                           </button>
                         )}
 
+                        {subtask.status === 'submitted' && task.client_id === user?.id && (
+                          <button 
+                            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const detail = subtaskDetails[subtask.id]
+                              setReviewModal({
+                                isOpen: true,
+                                subtaskId: subtask.id,
+                                subtaskTitle: subtask.title,
+                                submission: detail?.submissions?.[0] ? {
+                                  content_summary: detail.submissions[0].content_summary,
+                                  artifact_ipfs_hash: detail.submissions[0].artifact_ipfs_hash,
+                                  artifact_type: detail.submissions[0].artifact_type,
+                                  submitted_at: detail.submissions[0].submitted_at,
+                                } : undefined,
+                              })
+                            }}
+                          >
+                            Review
+                          </button>
+                        )}
+
                         <span className={`text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
                           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -525,6 +564,15 @@ export default function TaskDetail() {
         subtaskId={submissionModal.subtaskId}
         subtaskTitle={submissionModal.subtaskTitle}
         taskId={taskId!}
+      />
+
+      <ReviewModal
+        isOpen={reviewModal.isOpen}
+        onClose={() => setReviewModal({ isOpen: false, subtaskId: '', subtaskTitle: '' })}
+        subtaskId={reviewModal.subtaskId}
+        subtaskTitle={reviewModal.subtaskTitle}
+        taskId={taskId!}
+        submission={reviewModal.submission}
       />
     </div>
   )
