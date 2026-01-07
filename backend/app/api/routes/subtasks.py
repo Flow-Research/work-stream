@@ -20,6 +20,11 @@ from app.schemas.subtask import (
 from app.schemas.submission import SubmissionResponse
 from app.schemas.dispute import DisputeCreate, DisputeResponse
 from app.models.dispute import Dispute
+from app.services.ipfs import IPFSService
+
+# Constants for file validation
+ALLOWED_FILE_EXTENSIONS = {"json", "csv", "md", "txt"}
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10MB
 
 router = APIRouter()
 
@@ -293,15 +298,40 @@ async def submit_work(
             detail="Cannot submit for subtask in current status",
         )
     
-    # Handle artifact upload (IPFS integration would go here)
     artifact_ipfs_hash = None
     artifact_type = None
     
     if artifact:
-        # TODO: Upload to IPFS via Pinata
-        # For now, we'll store a placeholder
-        artifact_type = artifact.filename.split(".")[-1] if artifact.filename else "unknown"
-        artifact_ipfs_hash = f"placeholder_{subtask_id}"
+        if not artifact.filename:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Artifact filename is required",
+            )
+        
+        file_ext = artifact.filename.split(".")[-1].lower() if "." in artifact.filename else ""
+        if file_ext not in ALLOWED_FILE_EXTENSIONS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File type not allowed. Allowed types: {', '.join(ALLOWED_FILE_EXTENSIONS)}",
+            )
+        
+        file_content = await artifact.read()
+        if len(file_content) > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File size exceeds maximum allowed ({MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB)",
+            )
+        
+        ipfs_service = IPFSService()
+        try:
+            artifact_ipfs_hash = await ipfs_service.pin_file(file_content, artifact.filename)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to upload artifact to IPFS: {str(e)}",
+            )
+        
+        artifact_type = file_ext
     
     # Create submission
     submission = Submission(
