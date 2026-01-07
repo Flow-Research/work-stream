@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService, subtaskService } from '../services/api'
 import { useAuthStore } from '../stores/auth'
 import toast from 'react-hot-toast'
+import SubmissionModal from '../components/SubmissionModal'
 import type { SubtaskBrief, SubtaskStatus, SubtaskType, ReferenceItem, Subtask, DeliverableItem } from '../types'
 
 const subtaskTypeLabels: Record<SubtaskType, string> = {
@@ -22,6 +23,11 @@ export default function TaskDetail() {
   const queryClient = useQueryClient()
   const [expandedSubtask, setExpandedSubtask] = useState<string | null>(null)
   const [subtaskDetails, setSubtaskDetails] = useState<Record<string, Subtask>>({})
+  const [submissionModal, setSubmissionModal] = useState<{ isOpen: boolean; subtaskId: string; subtaskTitle: string }>({
+    isOpen: false,
+    subtaskId: '',
+    subtaskTitle: '',
+  })
 
   const { data: task, isLoading, error } = useQuery({
     queryKey: ['task', taskId],
@@ -342,10 +348,17 @@ export default function TaskDetail() {
                           </button>
                         )}
                         
-                        {subtask.claimed_by === user?.id && subtask.status === 'claimed' && (
+                        {subtask.claimed_by === user?.id && (subtask.status === 'claimed' || subtask.status === 'in_progress') && (
                           <button 
                             className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSubmissionModal({
+                                isOpen: true,
+                                subtaskId: subtask.id,
+                                subtaskTitle: subtask.title,
+                              })
+                            }}
                           >
                             Submit Work
                           </button>
@@ -505,6 +518,14 @@ export default function TaskDetail() {
           <p className="text-gray-600">Connect your wallet to claim subtasks and earn rewards.</p>
         </div>
       )}
+
+      <SubmissionModal
+        isOpen={submissionModal.isOpen}
+        onClose={() => setSubmissionModal({ isOpen: false, subtaskId: '', subtaskTitle: '' })}
+        subtaskId={submissionModal.subtaskId}
+        subtaskTitle={submissionModal.subtaskTitle}
+        taskId={taskId!}
+      />
     </div>
   )
 }
