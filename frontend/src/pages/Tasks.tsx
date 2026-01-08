@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { taskService } from '../services/api'
+import { useAuthStore } from '../stores/auth'
+import CreateTaskModal from '../components/CreateTaskModal'
 import type { Task, TaskStatus } from '../types'
 
 const statusColors: Record<TaskStatus, string> = {
@@ -27,8 +29,10 @@ const statusLabels: Record<TaskStatus, string> = {
 }
 
 export default function Tasks() {
+  const { user } = useAuthStore()
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [page, setPage] = useState(1)
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['tasks', statusFilter, page],
@@ -59,17 +63,30 @@ export default function Tasks() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Research Tasks</h1>
         
-        {/* Filter */}
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="input w-48"
-        >
-          <option value="">All Status</option>
-          <option value="funded">Funded</option>
-          <option value="in_progress">In Progress</option>
-          <option value="completed">Completed</option>
-        </select>
+        <div className="flex items-center gap-4">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="input w-48"
+          >
+            <option value="">All Status</option>
+            <option value="funded">Funded</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+          </select>
+          
+          {user?.is_admin && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Create Task
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Task List */}
@@ -144,6 +161,11 @@ export default function Tasks() {
           </button>
         </div>
       )}
+
+      <CreateTaskModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+      />
     </div>
   )
 }

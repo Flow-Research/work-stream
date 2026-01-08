@@ -93,6 +93,8 @@ export const taskService = {
     total_budget_cngn: string
     skills_required?: string[]
     deadline?: string
+    background_context?: string
+    methodology_notes?: string
   }) {
     const response = await api.post('/tasks', data)
     return response.data

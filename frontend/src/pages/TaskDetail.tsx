@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import SubmissionModal from '../components/SubmissionModal'
 import ReviewModal from '../components/ReviewModal'
 import FundTaskButton from '../components/FundTaskButton'
+import DecomposeTaskModal from '../components/DecomposeTaskModal'
 import type { SubtaskBrief, SubtaskStatus, SubtaskType, ReferenceItem, Subtask, DeliverableItem } from '../types'
 
 const subtaskTypeLabels: Record<SubtaskType, string> = {
@@ -45,6 +46,7 @@ export default function TaskDetail() {
     subtaskId: '',
     subtaskTitle: '',
   })
+  const [showDecomposeModal, setShowDecomposeModal] = useState(false)
 
   const { data: task, isLoading, error } = useQuery({
     queryKey: ['task', taskId],
@@ -144,6 +146,20 @@ export default function TaskDetail() {
                 budgetCngn={task.total_budget_cngn}
                 onSuccess={() => queryClient.invalidateQueries({ queryKey: ['task', taskId] })}
               />
+            </div>
+          )}
+          
+          {(task.status === 'funded' || task.status === 'decomposed') && 
+           (!task.subtasks || task.subtasks.length === 0) && 
+           (task.client_id === user?.id || user?.is_admin) && (
+            <div className="mt-4">
+              <button
+                onClick={() => setShowDecomposeModal(true)}
+                className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+              >
+                <span>🤖</span>
+                Decompose with AI
+              </button>
             </div>
           )}
         </div>
@@ -584,6 +600,15 @@ export default function TaskDetail() {
         subtaskTitle={reviewModal.subtaskTitle}
         taskId={taskId!}
         submission={reviewModal.submission}
+      />
+
+      <DecomposeTaskModal
+        isOpen={showDecomposeModal}
+        onClose={() => setShowDecomposeModal(false)}
+        taskId={taskId!}
+        taskTitle={task.title}
+        researchQuestion={task.research_question}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['task', taskId] })}
       />
     </div>
   )
