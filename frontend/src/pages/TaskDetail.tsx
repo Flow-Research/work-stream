@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import toast from 'react-hot-toast'
 import SubmissionModal from '../components/SubmissionModal'
 import ReviewModal from '../components/ReviewModal'
+import FundTaskButton from '../components/FundTaskButton'
 import type { SubtaskBrief, SubtaskStatus, SubtaskType, ReferenceItem, Subtask, DeliverableItem } from '../types'
 
 const subtaskTypeLabels: Record<SubtaskType, string> = {
@@ -135,6 +136,16 @@ export default function TaskDetail() {
               <div className="text-sm text-white/80">Total Budget</div>
             </div>
           </div>
+          
+          {task.status === 'draft' && (task.client_id === user?.id || user?.is_admin) && (
+            <div className="mt-4 max-w-xs">
+              <FundTaskButton
+                taskId={taskId!}
+                budgetCngn={task.total_budget_cngn}
+                onSuccess={() => queryClient.invalidateQueries({ queryKey: ['task', taskId] })}
+              />
+            </div>
+          )}
         </div>
 
         <div className="p-8 space-y-8">
