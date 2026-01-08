@@ -1,11 +1,11 @@
-"""AI assistance endpoints."""
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import CurrentUser, DbSession
+from app.core.rate_limit import limiter, RATE_LIMIT_AI
 from app.services.ai import AIService
 from app.services.papers import PaperService
 
@@ -99,27 +99,19 @@ class SynthesizeResponse(BaseModel):
 
 
 @router.post("/decompose-task", response_model=DecomposeTaskResponse)
+@limiter.limit(RATE_LIMIT_AI)
 async def decompose_task(
-    request: DecomposeTaskRequest,
+    request: Request,
+    body: DecomposeTaskRequest,
     current_user: CurrentUser,
 ) -> DecomposeTaskResponse:
-    """
-    Use AI to decompose a research question into subtasks.
-    
-    Args:
-        request: The decomposition request
-        current_user: The authenticated user
-        
-    Returns:
-        List of proposed subtasks
-    """
     ai_service = AIService()
     
     try:
         subtasks = await ai_service.decompose_task(
-            research_question=request.research_question,
-            budget=request.budget,
-            context=request.context,
+            research_question=body.research_question,
+            budget=body.budget,
+            context=body.context,
         )
         return DecomposeTaskResponse(subtasks=subtasks)
     except Exception as e:
@@ -130,26 +122,18 @@ async def decompose_task(
 
 
 @router.post("/discover-papers", response_model=DiscoverPapersResponse)
+@limiter.limit(RATE_LIMIT_AI)
 async def discover_papers(
-    request: DiscoverPapersRequest,
+    request: Request,
+    body: DiscoverPapersRequest,
     current_user: CurrentUser,
 ) -> DiscoverPapersResponse:
-    """
-    Discover papers relevant to a research query.
-    
-    Args:
-        request: The discovery request
-        current_user: The authenticated user
-        
-    Returns:
-        List of discovered papers
-    """
     paper_service = PaperService()
     
     try:
         papers = await paper_service.search_papers(
-            query=request.query,
-            limit=request.limit,
+            query=body.query,
+            limit=body.limit,
         )
         return DiscoverPapersResponse(papers=papers)
     except Exception as e:
@@ -160,26 +144,18 @@ async def discover_papers(
 
 
 @router.post("/extract-claims", response_model=ExtractClaimsResponse)
+@limiter.limit(RATE_LIMIT_AI)
 async def extract_claims(
-    request: ExtractClaimsRequest,
+    request: Request,
+    body: ExtractClaimsRequest,
     current_user: CurrentUser,
 ) -> ExtractClaimsResponse:
-    """
-    Extract claims from paper text using AI.
-    
-    Args:
-        request: The extraction request
-        current_user: The authenticated user
-        
-    Returns:
-        List of extracted claims
-    """
     ai_service = AIService()
     
     try:
         claims = await ai_service.extract_claims(
-            paper_id=request.paper_id,
-            paper_text=request.paper_text,
+            paper_id=body.paper_id,
+            paper_text=body.paper_text,
         )
         return ExtractClaimsResponse(claims=claims)
     except Exception as e:
@@ -190,26 +166,18 @@ async def extract_claims(
 
 
 @router.post("/synthesize", response_model=SynthesizeResponse)
+@limiter.limit(RATE_LIMIT_AI)
 async def synthesize_claims(
-    request: SynthesizeRequest,
+    request: Request,
+    body: SynthesizeRequest,
     current_user: CurrentUser,
 ) -> SynthesizeResponse:
-    """
-    Synthesize claims into a coherent summary.
-    
-    Args:
-        request: The synthesis request
-        current_user: The authenticated user
-        
-    Returns:
-        Synthesized content
-    """
     ai_service = AIService()
     
     try:
         synthesis = await ai_service.synthesize(
-            claims=request.claims,
-            format=request.format,
+            claims=body.claims,
+            format=body.format,
         )
         return SynthesizeResponse(synthesis=synthesis)
     except Exception as e:

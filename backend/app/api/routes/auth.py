@@ -1,11 +1,11 @@
-"""Authentication endpoints."""
 from typing import Annotated
 
 from cachetools import TTLCache
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.rate_limit import limiter, RATE_LIMIT_AUTH
 from app.core.security import (
     create_access_token,
     create_nonce,
@@ -29,17 +29,9 @@ nonce_cache: TTLCache = TTLCache(maxsize=10000, ttl=300)
 
 
 @router.post("/nonce", response_model=NonceResponse)
-async def get_nonce(request: NonceRequest) -> NonceResponse:
-    """
-    Get a nonce for wallet signature verification.
-    
-    Args:
-        request: The nonce request containing wallet address
-        
-    Returns:
-        The nonce and message to sign
-    """
-    wallet = request.wallet_address.lower()
+@limiter.limit(RATE_LIMIT_AUTH)
+async def get_nonce(request: Request, body: NonceRequest) -> NonceResponse:
+    wallet = body.wallet_address.lower()
     nonce = create_nonce()
     message = get_message_to_sign(nonce)
     
@@ -50,36 +42,23 @@ async def get_nonce(request: NonceRequest) -> NonceResponse:
 
 
 @router.post("/verify", response_model=TokenResponse)
+@limiter.limit(RATE_LIMIT_AUTH)
 async def verify_wallet(
-    request: VerifyRequest,
+    request: Request,
+    body: VerifyRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
-    """
-    Verify wallet signature and issue JWT token.
+    wallet = body.wallet_address.lower()
     
-    Args:
-        request: The verification request
-        db: Database session
-        
-    Returns:
-        Access token and user info
-        
-    Raises:
-        HTTPException: If verification fails
-    """
-    wallet = request.wallet_address.lower()
-    
-    # Check nonce exists and matches
     stored_nonce = nonce_cache.get(wallet)
-    if stored_nonce is None or stored_nonce != request.nonce:
+    if stored_nonce is None or stored_nonce != body.nonce:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired nonce",
         )
     
-    # Verify signature
-    message = get_message_to_sign(request.nonce)
-    if not verify_signature(wallet, message, request.signature):
+    message = get_message_to_sign(body.nonce)
+    if not verify_signature(wallet, message, body.signature):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid signature",

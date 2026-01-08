@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import subprocess
 import sys
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -13,11 +14,20 @@ from app.db.session import engine, async_session_maker as async_session
 from app.models import User, Task, Subtask
 
 
-async def create_tables():
-    print("Creating database tables...")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    print("Tables created successfully!")
+def run_migrations():
+    print("Running database migrations...")
+    backend_dir = Path(__file__).parent.parent
+    result = subprocess.run(
+        ["alembic", "upgrade", "head"],
+        cwd=backend_dir,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"Migration failed: {result.stderr}")
+        sys.exit(1)
+    print(result.stdout)
+    print("Migrations completed successfully!")
 
 
 async def seed_data():
@@ -340,7 +350,7 @@ async def seed_data():
 
 
 async def main():
-    await create_tables()
+    run_migrations()
     await seed_data()
     await engine.dispose()
     print("\nDatabase setup complete!")
