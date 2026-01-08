@@ -1,4 +1,4 @@
-import { useAccount, useConnect, useDisconnect } from 'wagmi'
+import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi'
 import { useEffect, useState, useRef } from 'react'
 import { useAuthStore } from '../stores/auth'
 import { authService } from '../services/api'
@@ -9,8 +9,10 @@ export default function ConnectButton() {
   const { address, isConnected } = useAccount()
   const { connect, connectors } = useConnect()
   const { disconnect } = useDisconnect()
+  const { signMessageAsync } = useSignMessage()
   const { user, setUser, setToken, logout, isAuthenticated } = useAuthStore()
   const [isOpen, setIsOpen] = useState(false)
+  const [isAuthenticating, setIsAuthenticating] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -25,34 +27,36 @@ export default function ConnectButton() {
 
   useEffect(() => {
     const authenticate = async () => {
-      if (isConnected && address && !isAuthenticated) {
+      if (isConnected && address && !isAuthenticated && !isAuthenticating) {
+        setIsAuthenticating(true)
         try {
-          const { nonce } = await authService.getNonce(address)
-          const connector = connectors[0]
-          if (!connector) return
-          const response = await authService.verify(address, '0x', nonce)
+          // 1. Get nonce from backend
+          const { nonce, message } = await authService.getNonce(address)
+          
+          // 2. Sign the message with MetaMask
+          const signature = await signMessageAsync({ message })
+          
+          // 3. Verify signature and get JWT
+          const response = await authService.verify(address, signature, nonce)
           setToken(response.access_token)
+          
+          // 4. Fetch user profile
           const fetchedUser = await authService.getProfile(response.access_token)
           setUser(fetchedUser)
           toast.success('Connected successfully!')
         } catch (error) {
           console.error('Authentication error:', error)
-          setUser({
-            id: '00000000-0000-0000-0000-000000000000',
-            wallet_address: address,
-            name: `User_${address.slice(0, 8)}`,
-            country: 'NG',
-            reputation_tier: 'new',
-            tasks_completed: 0,
-            is_admin: false,
-            is_banned: false,
-          })
+          // User rejected signature or other error - don't fake auth
+          toast.error('Authentication failed. Please try again.')
+          disconnect()
+        } finally {
+          setIsAuthenticating(false)
         }
         setIsOpen(false)
       }
     }
     authenticate()
-  }, [isConnected, address, isAuthenticated])
+  }, [isConnected, address, isAuthenticated, isAuthenticating, signMessageAsync, disconnect])
 
   const handleDisconnect = () => {
     disconnect()

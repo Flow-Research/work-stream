@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     base_rpc_url: str = "https://sepolia.base.org"
     escrow_contract_address: Optional[str] = None
     registry_contract_address: Optional[str] = None
+    cngn_contract_address: Optional[str] = None
     admin_wallet: Optional[str] = None
     
     # External Services
