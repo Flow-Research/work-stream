@@ -76,7 +76,7 @@ export const authService = {
 
 // Task service
 export const taskService = {
-  async list(params?: { status?: string; skills?: string; page?: number; limit?: number }) {
+  async list(params?: { status?: string; skills?: string; search?: string; page?: number; limit?: number; include_drafts?: boolean }) {
     const response = await api.get('/tasks', { params })
     return response.data
   },
@@ -170,6 +170,58 @@ export const aiService = {
   async discoverPapers(query: string, limit?: number) {
     const response = await api.post('/ai/discover-papers', { query, limit })
     return response.data
+  },
+}
+
+// Skills service
+export const skillsService = {
+  async list(params?: { category_id?: string; search?: string; include_inactive?: boolean }) {
+    const response = await api.get('/skills', { params })
+    return response.data
+  },
+
+  async listGrouped(params?: { include_inactive?: boolean }) {
+    const response = await api.get('/skills/grouped', { params })
+    return response.data
+  },
+
+  async get(skillId: string) {
+    const response = await api.get(`/skills/${skillId}`)
+    return response.data
+  },
+
+  async create(data: { name: string; description?: string; category_id?: string; display_order?: number }) {
+    const response = await api.post('/skills', data)
+    return response.data
+  },
+
+  async update(skillId: string, data: { name?: string; description?: string; category_id?: string; is_active?: boolean; display_order?: number }) {
+    const response = await api.patch(`/skills/${skillId}`, data)
+    return response.data
+  },
+
+  async delete(skillId: string) {
+    await api.delete(`/skills/${skillId}`)
+  },
+
+  // Categories
+  async listCategories(params?: { include_inactive?: boolean }) {
+    const response = await api.get('/skills/categories/', { params })
+    return response.data
+  },
+
+  async createCategory(data: { name: string; description?: string; color?: string; icon?: string; display_order?: number }) {
+    const response = await api.post('/skills/categories/', data)
+    return response.data
+  },
+
+  async updateCategory(categoryId: string, data: { name?: string; description?: string; color?: string; icon?: string; is_active?: boolean; display_order?: number }) {
+    const response = await api.patch(`/skills/categories/${categoryId}`, data)
+    return response.data
+  },
+
+  async deleteCategory(categoryId: string) {
+    await api.delete(`/skills/categories/${categoryId}`)
   },
 }
 

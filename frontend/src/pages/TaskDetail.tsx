@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { taskService, subtaskService } from '../services/api'
 import { useAuthStore } from '../stores/auth'
@@ -8,6 +8,7 @@ import SubmissionModal from '../components/SubmissionModal'
 import ReviewModal from '../components/ReviewModal'
 import FundTaskButton from '../components/FundTaskButton'
 import DecomposeTaskModal from '../components/DecomposeTaskModal'
+import CountdownTimer, { InlineCountdown } from '../components/CountdownTimer'
 import type { SubtaskBrief, SubtaskStatus, SubtaskType, ReferenceItem, Subtask, DeliverableItem } from '../types'
 
 const subtaskTypeLabels: Record<SubtaskType, string> = {
@@ -22,19 +23,20 @@ const subtaskTypeLabels: Record<SubtaskType, string> = {
 
 export default function TaskDetail() {
   const { taskId } = useParams<{ taskId: string }>()
+  const navigate = useNavigate()
   const { user, isAuthenticated } = useAuthStore()
   const queryClient = useQueryClient()
   const [expandedSubtask, setExpandedSubtask] = useState<string | null>(null)
   const [subtaskDetails, setSubtaskDetails] = useState<Record<string, Subtask>>({})
-  const [submissionModal, setSubmissionModal] = useState<{ isOpen: boolean; subtaskId: string; subtaskTitle: string }>({
+  const [submissionModal, setSubmissionModal] = useState<{ isOpen: boolean; subtaskId: string; taskTitle: string }>({
     isOpen: false,
     subtaskId: '',
-    subtaskTitle: '',
+    taskTitle: '',
   })
   const [reviewModal, setReviewModal] = useState<{
     isOpen: boolean
     subtaskId: string
-    subtaskTitle: string
+    taskTitle: string
     submission?: {
       content_summary: string
       artifact_ipfs_hash?: string
@@ -44,7 +46,7 @@ export default function TaskDetail() {
   }>({
     isOpen: false,
     subtaskId: '',
-    subtaskTitle: '',
+    taskTitle: '',
   })
   const [showDecomposeModal, setShowDecomposeModal] = useState(false)
 
@@ -114,6 +116,25 @@ export default function TaskDetail() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Breadcrumb Navigation */}
+      <nav className="flex items-center gap-2 text-sm">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all duration-200 group"
+        >
+          <svg className="w-4 h-4 transform group-hover:-translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+        <span className="text-gray-300">/</span>
+        <Link to="/tasks" className="text-gray-500 hover:text-primary-600 transition-colors">
+          Tasks
+        </Link>
+        <span className="text-gray-300">/</span>
+        <span className="text-primary-700 font-medium truncate max-w-xs">{task.title}</span>
+      </nav>
+
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="bg-primary-500 px-8 py-6">
           <div className="flex items-start justify-between">
@@ -176,24 +197,27 @@ export default function TaskDetail() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {task.deadline && (
-              <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+              <div className="bg-white rounded-xl p-4 border border-gray-200 cursor-pointer transition-all duration-300 hover:shadow-md hover:border-primary-200 hover:-translate-y-0.5 group">
+                <div className="flex items-center gap-2 text-gray-500 text-sm mb-1 group-hover:text-primary-600 transition-colors">
                   <span>📅</span>
                   <span className="font-medium">Deadline</span>
                 </div>
-                <p className="text-gray-900 font-semibold">
+                <p className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors">
                   {new Date(task.deadline).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 </p>
               </div>
             )}
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-              <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
+            <div
+              className="bg-white rounded-xl p-4 border border-gray-200 cursor-pointer transition-all duration-300 hover:shadow-md hover:border-primary-200 hover:-translate-y-0.5 group"
+              onClick={() => document.getElementById('subtasks-section')?.scrollIntoView({ behavior: 'smooth' })}
+            >
+              <div className="flex items-center gap-2 text-gray-500 text-sm mb-1 group-hover:text-primary-600 transition-colors">
                 <span>📊</span>
                 <span className="font-medium">Subtasks</span>
               </div>
-              <p className="text-gray-900 font-semibold">{task.subtasks?.length || 0} tasks</p>
+              <p className="text-gray-900 font-semibold group-hover:text-primary-700 transition-colors">{task.subtasks?.length || 0} tasks</p>
             </div>
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+            <div className="bg-white rounded-xl p-4 border border-gray-200 cursor-default transition-all duration-300 hover:shadow-md hover:border-gray-300 group">
               <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
                 <span>⏱️</span>
                 <span className="font-medium">Created</span>
@@ -300,7 +324,7 @@ export default function TaskDetail() {
       </div>
 
       {/* Subtasks */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+      <div id="subtasks-section" className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden scroll-mt-6">
         <div className="px-8 py-5 border-b border-gray-100 bg-gray-50/50">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -372,8 +396,16 @@ export default function TaskDetail() {
                           <p className="text-sm text-gray-500 mt-0.5">{subtaskTypeLabels[subtask.subtask_type]}</p>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-4">
+                        {/* Inline countdown for claimed/in_progress subtasks */}
+                        {(subtask.status === 'claimed' || subtask.status === 'in_progress') && subtaskDetails[subtask.id] && (
+                          <InlineCountdown
+                            deadline={subtaskDetails[subtask.id].deadline}
+                            claimedAt={subtaskDetails[subtask.id].claimed_at}
+                            estimatedHours={subtaskDetails[subtask.id].estimated_hours}
+                          />
+                        )}
                         <div className="text-right">
                           <div className="font-bold text-gray-900">
                             ₦{parseFloat(subtask.budget_cngn).toLocaleString()}
@@ -399,7 +431,7 @@ export default function TaskDetail() {
                               setSubmissionModal({
                                 isOpen: true,
                                 subtaskId: subtask.id,
-                                subtaskTitle: subtask.title,
+                                taskTitle: subtask.title,
                               })
                             }}
                           >
@@ -416,7 +448,7 @@ export default function TaskDetail() {
                               setReviewModal({
                                 isOpen: true,
                                 subtaskId: subtask.id,
-                                subtaskTitle: subtask.title,
+                                taskTitle: subtask.title,
                                 submission: detail?.submissions?.[0] ? {
                                   content_summary: detail.submissions[0].content_summary,
                                   artifact_ipfs_hash: detail.submissions[0].artifact_ipfs_hash,
@@ -444,7 +476,7 @@ export default function TaskDetail() {
                       <div className="ml-12 pl-6 border-l-2 border-gray-200 space-y-6">
                         <p className="text-gray-600 leading-relaxed">{details.description}</p>
 
-                        <div className="flex flex-wrap gap-6">
+                        <div className="flex flex-wrap gap-4">
                           {details.estimated_hours && (
                             <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-gray-200">
                               <span className="text-lg">⏱️</span>
@@ -453,6 +485,15 @@ export default function TaskDetail() {
                                 <div className="font-semibold text-gray-900">{details.estimated_hours} hours</div>
                               </div>
                             </div>
+                          )}
+                          {/* Countdown Timer - shows when subtask is claimed/in_progress */}
+                          {(subtask.status === 'claimed' || subtask.status === 'in_progress') && (
+                            <CountdownTimer
+                              deadline={details.deadline}
+                              claimedAt={details.claimed_at}
+                              estimatedHours={details.estimated_hours}
+                              size="md"
+                            />
                           )}
                           {details.tools_required && details.tools_required.length > 0 && (
                             <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-gray-200">
@@ -587,17 +628,17 @@ export default function TaskDetail() {
 
       <SubmissionModal
         isOpen={submissionModal.isOpen}
-        onClose={() => setSubmissionModal({ isOpen: false, subtaskId: '', subtaskTitle: '' })}
+        onClose={() => setSubmissionModal({ isOpen: false, subtaskId: '', taskTitle: '' })}
         subtaskId={submissionModal.subtaskId}
-        subtaskTitle={submissionModal.subtaskTitle}
+        taskTitle={submissionModal.taskTitle}
         taskId={taskId!}
       />
 
       <ReviewModal
         isOpen={reviewModal.isOpen}
-        onClose={() => setReviewModal({ isOpen: false, subtaskId: '', subtaskTitle: '' })}
+        onClose={() => setReviewModal({ isOpen: false, subtaskId: '', taskTitle: '' })}
         subtaskId={reviewModal.subtaskId}
-        subtaskTitle={reviewModal.subtaskTitle}
+        taskTitle={reviewModal.taskTitle}
         taskId={taskId!}
         submission={reviewModal.submission}
       />

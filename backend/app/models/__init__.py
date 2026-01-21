@@ -5,6 +5,7 @@ from app.models.subtask import Subtask
 from app.models.submission import Submission
 from app.models.artifact import Artifact, ArtifactPurchase
 from app.models.dispute import Dispute
+from app.models.skill import Skill, SkillCategory
 
 __all__ = [
     "User",
@@ -14,4 +15,6 @@ __all__ = [
     "Artifact",
     "ArtifactPurchase",
     "Dispute",
+    "Skill",
+    "SkillCategory",
 ]

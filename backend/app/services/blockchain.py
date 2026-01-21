@@ -214,8 +214,136 @@ class BlockchainService:
         """Get the current task counter from the escrow contract."""
         if not self.escrow_contract:
             return 0
-        
+
         try:
             return self.escrow_contract.functions.taskCounter().call()
         except Exception:
             return 0
+
+    async def approve_subtask_payment(
+        self,
+        task_id: int,
+        subtask_index: int,
+        worker_address: str,
+        amount_wei: int,
+    ) -> Optional[str]:
+        """
+        Approve a subtask and release payment to the worker.
+
+        This calls the FlowEscrow.approveSubtask() function which transfers
+        the specified amount to the worker.
+
+        Args:
+            task_id: The on-chain task ID
+            subtask_index: The subtask index within the task
+            worker_address: The worker's wallet address
+            amount_wei: The payment amount in wei (18 decimals)
+
+        Returns:
+            Transaction hash if successful, None otherwise
+        """
+        if not self.escrow_contract:
+            print("Escrow contract not configured")
+            return None
+
+        if not settings.admin_private_key:
+            print("Admin private key not configured")
+            return None
+
+        try:
+            # Get the admin account from private key
+            account = self.w3.eth.account.from_key(settings.admin_private_key)
+
+            # Build the transaction
+            worker_checksum = Web3.to_checksum_address(worker_address)
+
+            tx = self.escrow_contract.functions.approveSubtask(
+                task_id,
+                subtask_index,
+                worker_checksum,
+                amount_wei,
+            ).build_transaction({
+                "from": account.address,
+                "nonce": self.w3.eth.get_transaction_count(account.address),
+                "gas": 200000,  # Estimated gas limit
+                "maxFeePerGas": self.w3.eth.gas_price * 2,
+                "maxPriorityFeePerGas": self.w3.to_wei(1, "gwei"),
+            })
+
+            # Sign the transaction
+            signed_tx = self.w3.eth.account.sign_transaction(tx, settings.admin_private_key)
+
+            # Send the transaction
+            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+
+            # Wait for confirmation (with timeout)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+
+            if receipt["status"] == 1:
+                return tx_hash.hex()
+            else:
+                print(f"Transaction failed: {tx_hash.hex()}")
+                return None
+
+        except Exception as e:
+            print(f"Error approving subtask payment: {e}")
+            return None
+
+    async def register_artifact(
+        self,
+        artifact_id: str,
+        content_hash: str,
+        contributors: list[str],
+    ) -> Optional[str]:
+        """
+        Register an artifact on the FlowArtifactRegistry.
+
+        Args:
+            artifact_id: Unique artifact ID (hex string)
+            content_hash: IPFS content hash (hex string)
+            contributors: List of contributor wallet addresses
+
+        Returns:
+            Transaction hash if successful, None otherwise
+        """
+        if not self.registry_contract:
+            print("Registry contract not configured")
+            return None
+
+        if not settings.admin_private_key:
+            print("Admin private key not configured")
+            return None
+
+        try:
+            account = self.w3.eth.account.from_key(settings.admin_private_key)
+
+            # Convert strings to bytes32
+            artifact_bytes = bytes.fromhex(artifact_id.replace("0x", "").zfill(64))
+            content_bytes = bytes.fromhex(content_hash.replace("0x", "").zfill(64))
+            contributor_addresses = [Web3.to_checksum_address(addr) for addr in contributors]
+
+            tx = self.registry_contract.functions.registerArtifact(
+                artifact_bytes,
+                content_bytes,
+                contributor_addresses,
+            ).build_transaction({
+                "from": account.address,
+                "nonce": self.w3.eth.get_transaction_count(account.address),
+                "gas": 300000,
+                "maxFeePerGas": self.w3.eth.gas_price * 2,
+                "maxPriorityFeePerGas": self.w3.to_wei(1, "gwei"),
+            })
+
+            signed_tx = self.w3.eth.account.sign_transaction(tx, settings.admin_private_key)
+            tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
+            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=60)
+
+            if receipt["status"] == 1:
+                return tx_hash.hex()
+            else:
+                print(f"Transaction failed: {tx_hash.hex()}")
+                return None
+
+        except Exception as e:
+            print(f"Error registering artifact: {e}")
+            return None

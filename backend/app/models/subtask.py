@@ -73,7 +73,7 @@ class Subtask(Base):
         nullable=True,
         index=True,
     )
-    claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
     # Collaborators
     collaborators: Mapped[Optional[list[uuid.UUID]]] = mapped_column(
@@ -86,8 +86,8 @@ class Subtask(Base):
     )
     
     # Review
-    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
@@ -96,7 +96,7 @@ class Subtask(Base):
     auto_approved: Mapped[bool] = mapped_column(Boolean, default=False)
     
     # Deadline
-    deadline: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deadline: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     registry_contract_address: Optional[str] = None
     cngn_contract_address: Optional[str] = None
     admin_wallet: Optional[str] = None
+    admin_private_key: Optional[str] = None  # For signing contract transactions
     
     # External Services
     claude_api_key: Optional[str] = None

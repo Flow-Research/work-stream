@@ -151,6 +151,8 @@ forge test -vvv
 | `ESCROW_CONTRACT_ADDRESS` | Yes | Deployed FlowEscrow contract address |
 | `REGISTRY_CONTRACT_ADDRESS` | Yes | Deployed FlowArtifactRegistry address |
 | `CNGN_CONTRACT_ADDRESS` | Yes | MockCNGN token contract address |
+| `ADMIN_WALLET` | No | Admin wallet address for verification |
+| `ADMIN_PRIVATE_KEY` | No | Admin private key for signing contract transactions |
 | `CLAUDE_API_KEY` | No | Anthropic API key for AI features |
 | `PINATA_API_KEY` | No | Pinata API key for IPFS uploads |
 | `PINATA_SECRET` | No | Pinata secret for IPFS uploads |
@@ -163,6 +165,8 @@ BASE_RPC_URL=https://sepolia.base.org
 ESCROW_CONTRACT_ADDRESS=0xf10D75Bd61eA5071677aE209FD3a9aA334Ac14FF
 REGISTRY_CONTRACT_ADDRESS=0x120ddd1Be4534d2Bd24009b913eB3057a2251751
 CNGN_CONTRACT_ADDRESS=0xfdf794bfBC24bCc7aE733a33a78CE16e71024821
+ADMIN_WALLET=0x...your-admin-wallet-address
+ADMIN_PRIVATE_KEY=your-admin-private-key-for-payment-release
 CLAUDE_API_KEY=your-anthropic-key
 PINATA_API_KEY=your-pinata-key
 PINATA_SECRET=your-pinata-secret

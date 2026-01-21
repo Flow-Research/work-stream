@@ -196,3 +196,41 @@ export interface PaginatedResponse<T> {
   page: number
   limit: number
 }
+
+// Skills types
+export interface SkillCategory {
+  id: string
+  name: string
+  description?: string
+  color?: string
+  icon?: string
+  display_order: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Skill {
+  id: string
+  name: string
+  slug: string
+  description?: string
+  category_id?: string
+  is_active: boolean
+  display_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface SkillWithCategory extends Skill {
+  category?: SkillCategory
+}
+
+export interface SkillCategoryWithSkills extends SkillCategory {
+  skills: Skill[]
+}
+
+export interface SkillsGroupedResponse {
+  categories: SkillCategoryWithSkills[]
+  uncategorized: Skill[]
+}

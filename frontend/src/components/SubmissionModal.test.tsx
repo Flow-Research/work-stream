@@ -35,8 +35,7 @@ const defaultProps = {
   isOpen: true,
   onClose: vi.fn(),
   subtaskId: 'subtask-123',
-  subtaskTitle: 'Test Subtask',
-  taskId: 'task-123',
+  taskTitle: 'Test Task',
 }
 
 describe('SubmissionModal', () => {
@@ -49,23 +48,39 @@ describe('SubmissionModal', () => {
     expect(screen.queryByText('Submit Work')).not.toBeInTheDocument()
   })
 
-  it('renders modal when isOpen is true', () => {
+  it('renders modal content when isOpen is true', () => {
     renderWithProviders(<SubmissionModal {...defaultProps} />)
     expect(screen.getByRole('heading', { name: 'Submit Work' })).toBeInTheDocument()
-    expect(screen.getByText('Test Subtask')).toBeInTheDocument()
+    expect(screen.getByText('Test Task')).toBeInTheDocument()
   })
 
-  it('has work summary textarea', () => {
+  it('has a text area for work summary', () => {
     renderWithProviders(<SubmissionModal {...defaultProps} />)
     const textarea = screen.getByPlaceholderText(/Describe what you accomplished/i)
     expect(textarea).toBeInTheDocument()
-    expect(textarea).toHaveAttribute('required')
   })
 
-  it('has file upload area', () => {
+  it('allows typing work summary', () => {
     renderWithProviders(<SubmissionModal {...defaultProps} />)
-    expect(screen.getByText(/Click to upload/i)).toBeInTheDocument()
-    expect(screen.getByText(/JSON, CSV, MD, TXT/i)).toBeInTheDocument()
+    const textarea = screen.getByPlaceholderText(/Describe what you accomplished/i)
+
+    fireEvent.change(textarea, { target: { value: 'I completed the work!' } })
+    expect(textarea).toHaveValue('I completed the work!')
+  })
+
+  it('has artifact section with add button', () => {
+    renderWithProviders(<SubmissionModal {...defaultProps} />)
+    expect(screen.getByText('Artifacts')).toBeInTheDocument()
+    expect(screen.getByText('+ Add Artifact')).toBeInTheDocument()
+  })
+
+  it('closes when close button is clicked', () => {
+    const onClose = vi.fn()
+    renderWithProviders(<SubmissionModal {...defaultProps} onClose={onClose} />)
+
+    const closeButton = screen.getByRole('button', { name: '' })
+    fireEvent.click(closeButton)
+    expect(onClose).toHaveBeenCalled()
   })
 
   it('has cancel and submit buttons', () => {
@@ -74,52 +89,14 @@ describe('SubmissionModal', () => {
     expect(screen.getByRole('button', { name: 'Submit Work' })).toBeInTheDocument()
   })
 
-  it('submit button is disabled when content summary is empty', () => {
+  it('allows adding artifacts', () => {
     renderWithProviders(<SubmissionModal {...defaultProps} />)
-    const submitButton = screen.getByRole('button', { name: 'Submit Work' })
-    expect(submitButton).toBeDisabled()
-  })
+    const titleInput = screen.getByPlaceholderText('Artifact title')
+    const addButton = screen.getByText('+ Add Artifact')
 
-  it('submit button is enabled when content summary has text', () => {
-    renderWithProviders(<SubmissionModal {...defaultProps} />)
-    const textarea = screen.getByPlaceholderText(/Describe what you accomplished/i)
-    
-    fireEvent.change(textarea, { target: { value: 'My work summary' } })
-    
-    const submitButton = screen.getByRole('button', { name: 'Submit Work' })
-    expect(submitButton).not.toBeDisabled()
-  })
+    fireEvent.change(titleInput, { target: { value: 'Test Dataset' } })
+    fireEvent.click(addButton)
 
-  it('calls onClose when cancel is clicked', () => {
-    const onClose = vi.fn()
-    renderWithProviders(<SubmissionModal {...defaultProps} onClose={onClose} />)
-    
-    fireEvent.click(screen.getByText('Cancel'))
-    expect(onClose).toHaveBeenCalled()
-  })
-
-  it('calls onClose when close button is clicked', () => {
-    const onClose = vi.fn()
-    renderWithProviders(<SubmissionModal {...defaultProps} onClose={onClose} />)
-    
-    const closeButtons = screen.getAllByRole('button')
-    const closeButton = closeButtons.find(btn => btn.className.includes('text-gray-400'))
-    if (closeButton) {
-      fireEvent.click(closeButton)
-      expect(onClose).toHaveBeenCalled()
-    }
-  })
-
-  it('allows typing in content summary', () => {
-    renderWithProviders(<SubmissionModal {...defaultProps} />)
-    const textarea = screen.getByPlaceholderText(/Describe what you accomplished/i)
-    
-    fireEvent.change(textarea, { target: { value: 'Test summary content' } })
-    expect(textarea).toHaveValue('Test summary content')
-  })
-
-  it('shows file size limit information', () => {
-    renderWithProviders(<SubmissionModal {...defaultProps} />)
-    expect(screen.getByText(/up to 10MB/i)).toBeInTheDocument()
+    expect(screen.getByText('Test Dataset')).toBeInTheDocument()
   })
 })

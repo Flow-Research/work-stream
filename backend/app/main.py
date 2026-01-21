@@ -7,7 +7,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from app.api.routes import auth, users, tasks, subtasks, ai, artifacts, admin
+from app.api.routes import auth, users, tasks, subtasks, ai, artifacts, admin, skills
 from app.core.config import settings
 from app.core.rate_limit import limiter
 
@@ -50,6 +50,7 @@ app.include_router(subtasks.router, prefix=f"{settings.api_v1_prefix}/subtasks",
 app.include_router(ai.router, prefix=f"{settings.api_v1_prefix}/ai", tags=["ai"])
 app.include_router(artifacts.router, prefix=f"{settings.api_v1_prefix}/artifacts", tags=["artifacts"])
 app.include_router(admin.router, prefix=f"{settings.api_v1_prefix}/admin", tags=["admin"])
+app.include_router(skills.router, prefix=f"{settings.api_v1_prefix}/skills", tags=["skills"])
 
 
 @app.get("/")

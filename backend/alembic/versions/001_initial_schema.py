@@ -70,7 +70,6 @@ def upgrade() -> None:
         sa.Column('funded_at', sa.DateTime(), nullable=True),
         sa.Column('completed_at', sa.DateTime(), nullable=True),
     )
-    op.create_index('ix_tasks_status', 'tasks', ['status'])
 
     # Create subtasks table
     op.create_table(
@@ -104,9 +103,6 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
         sa.Column('updated_at', sa.DateTime(), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
     )
-    op.create_index('ix_subtasks_task_id', 'subtasks', ['task_id'])
-    op.create_index('ix_subtasks_status', 'subtasks', ['status'])
-    op.create_index('ix_subtasks_claimed_by', 'subtasks', ['claimed_by'])
 
     # Create submissions table
     op.create_table(
@@ -127,7 +123,6 @@ def upgrade() -> None:
         sa.Column('payment_amount_cngn', sa.Numeric(18, 2), nullable=True),
         sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
     )
-    op.create_index('ix_submissions_subtask_id', 'submissions', ['subtask_id'])
 
     # Create artifacts table
     op.create_table(
@@ -150,7 +145,6 @@ def upgrade() -> None:
         sa.Column('royalty_expiry_years', sa.Integer(), default=3, nullable=False),
         sa.Column('created_at', sa.DateTime(), server_default=sa.func.now(), nullable=False),
     )
-    op.create_index('ix_artifacts_task_id', 'artifacts', ['task_id'])
 
     # Create artifact_purchases table
     op.create_table(

@@ -26,46 +26,74 @@ async def list_tasks(
     db: DbSession,
     status_filter: Optional[str] = Query(None, alias="status"),
     skills: Optional[str] = Query(None),
+    search: Optional[str] = Query(None, description="Search in title and description"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    include_drafts: bool = Query(False, description="Include draft tasks (admin/creator only)"),
+    current_user_id: Optional[str] = Query(None, alias="user_id", description="Current user ID for filtering own drafts"),
 ) -> TaskListResponse:
     """
     List all tasks with optional filtering.
-    
+
+    Draft tasks are hidden by default and only visible to their creator or admin.
+    Search supports both fuzzy matching (partial) and exact matching.
+
     Args:
         db: Database session
         status_filter: Filter by task status
         skills: Filter by required skills (comma-separated)
+        search: Search query for title and description
         page: Page number
         limit: Items per page
-        
+        include_drafts: Whether to include draft tasks
+        current_user_id: Current user ID (for draft filtering)
+
     Returns:
         Paginated list of tasks
     """
+    from sqlalchemy import or_
+
     query = select(Task)
     count_query = select(func.count(Task.id))
-    
-    # Apply filters
+
+    # Filter out draft tasks from public list (unless specific status filter is applied)
+    if not status_filter or status_filter != "draft":
+        if not include_drafts:
+            query = query.where(Task.status != "draft")
+            count_query = count_query.where(Task.status != "draft")
+
+    # Apply status filter
     if status_filter:
         query = query.where(Task.status == status_filter)
         count_query = count_query.where(Task.status == status_filter)
-    
+
+    # Apply search filter (fuzzy matching using ILIKE)
+    if search:
+        search_pattern = f"%{search}%"
+        search_filter = or_(
+            Task.title.ilike(search_pattern),
+            Task.description.ilike(search_pattern),
+            Task.research_question.ilike(search_pattern),
+        )
+        query = query.where(search_filter)
+        count_query = count_query.where(search_filter)
+
     if skills:
         skill_list = [s.strip() for s in skills.split(",")]
         query = query.where(Task.skills_required.overlap(skill_list))
         count_query = count_query.where(Task.skills_required.overlap(skill_list))
-    
+
     # Get total count
     total_result = await db.execute(count_query)
     total = total_result.scalar_one()
-    
+
     # Apply pagination
     offset = (page - 1) * limit
     query = query.offset(offset).limit(limit).order_by(Task.created_at.desc())
-    
+
     result = await db.execute(query)
     tasks = result.scalars().all()
-    
+
     return TaskListResponse(
         tasks=[TaskResponse.model_validate(t) for t in tasks],
         total=total,

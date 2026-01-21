@@ -5,23 +5,27 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status, UploadFile, File, Form
+from pydantic import BaseModel, Field
 from sqlalchemy import select, func
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, AdminUser
 from app.models.subtask import Subtask
 from app.models.submission import Submission
 from app.models.task import Task
 from app.models.user import User
 from app.schemas.subtask import (
     SubtaskClaimRequest,
+    SubtaskCreate,
     SubtaskListResponse,
     SubtaskRejectRequest,
     SubtaskResponse,
+    SubtaskUpdate,
 )
 from app.schemas.submission import SubmissionResponse
 from app.schemas.dispute import DisputeCreate, DisputeResponse
 from app.models.dispute import Dispute
 from app.services.ipfs import IPFSService
+from app.services.blockchain import BlockchainService
 
 # Constants for file validation
 ALLOWED_FILE_EXTENSIONS = {"json", "csv", "md", "txt"}
@@ -363,48 +367,53 @@ async def approve_subtask(
     review_notes: Optional[str] = None,
 ) -> SubtaskResponse:
     """
-    Approve a submitted subtask.
-    
+    Approve a submitted subtask and release payment to the worker.
+
+    This endpoint:
+    1. Validates the subtask is in submitted status
+    2. Calls the smart contract to release payment
+    3. Updates the database with approval status and tx hash
+
     Args:
         subtask_id: The subtask ID
         review_notes: Optional review notes
         current_user: The authenticated user (must be client or admin)
         db: Database session
-        
+
     Returns:
         The approved subtask
     """
     result = await db.execute(select(Subtask).where(Subtask.id == subtask_id))
     subtask = result.scalar_one_or_none()
-    
+
     if subtask is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Subtask not found",
         )
-    
+
     # Get parent task to check authorization
     task_result = await db.execute(select(Task).where(Task.id == subtask.task_id))
     task = task_result.scalar_one_or_none()
-    
+
     if task is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found",
         )
-    
+
     if task.client_id != current_user.id and not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to approve this subtask",
         )
-    
+
     if subtask.status != "submitted":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Subtask is not pending approval",
         )
-    
+
     # Get the latest submission
     sub_result = await db.execute(
         select(Submission)
@@ -413,30 +422,64 @@ async def approve_subtask(
         .limit(1)
     )
     submission = sub_result.scalar_one_or_none()
-    
-    if submission:
-        submission.status = "approved"
-        submission.reviewed_by = current_user.id
-        submission.reviewed_at = datetime.utcnow()
-        submission.review_notes = review_notes
-    
-    subtask.status = "approved"
-    subtask.approved_at = datetime.utcnow()
-    subtask.approved_by = current_user.id
-    
-    # Update worker reputation
+
+    # Get worker info for payment
+    worker = None
     if subtask.claimed_by:
         worker_result = await db.execute(
             select(User).where(User.id == subtask.claimed_by)
         )
         worker = worker_result.scalar_one_or_none()
-        if worker:
-            worker.tasks_completed += 1
-            worker.tasks_approved += 1
-    
+
+    # Attempt blockchain payment release
+    payment_tx_hash = None
+    if worker and task.escrow_contract_task_id is not None and subtask.budget_cngn:
+        blockchain_service = BlockchainService()
+
+        if blockchain_service.is_configured():
+            # Calculate payment amount in wei (18 decimals)
+            payment_amount_wei = int(Decimal(str(subtask.budget_cngn)) * Decimal("1e18"))
+
+            # Get subtask index within the task
+            subtask_index_result = await db.execute(
+                select(func.count(Subtask.id))
+                .where(Subtask.task_id == task.id)
+                .where(Subtask.sequence_order < subtask.sequence_order)
+            )
+            subtask_index = subtask_index_result.scalar_one() or 0
+
+            try:
+                payment_tx_hash = await blockchain_service.approve_subtask_payment(
+                    task_id=task.escrow_contract_task_id,
+                    subtask_index=subtask_index,
+                    worker_address=worker.wallet_address,
+                    amount_wei=payment_amount_wei,
+                )
+            except Exception as e:
+                # Log error but don't fail the approval
+                print(f"Blockchain payment failed: {e}")
+
+    # Update submission
+    if submission:
+        submission.status = "approved"
+        submission.reviewed_by = current_user.id
+        submission.reviewed_at = datetime.utcnow()
+        submission.review_notes = review_notes
+        if payment_tx_hash:
+            submission.payment_tx_hash = payment_tx_hash
+
+    subtask.status = "approved"
+    subtask.approved_at = datetime.utcnow()
+    subtask.approved_by = current_user.id
+
+    # Update worker reputation
+    if worker:
+        worker.tasks_completed += 1
+        worker.tasks_approved += 1
+
     await db.flush()
     await db.refresh(subtask)
-    
+
     return SubtaskResponse.model_validate(subtask)
 
 
@@ -510,39 +553,39 @@ async def create_dispute(
 ) -> DisputeResponse:
     """
     Create a dispute for a subtask.
-    
+
     Args:
         subtask_id: The subtask ID
         dispute_data: The dispute reason
         current_user: The authenticated user
         db: Database session
-        
+
     Returns:
         The created dispute
     """
     result = await db.execute(select(Subtask).where(Subtask.id == subtask_id))
     subtask = result.scalar_one_or_none()
-    
+
     if subtask is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Subtask not found",
         )
-    
+
     # Check user is involved (worker or client)
     task_result = await db.execute(select(Task).where(Task.id == subtask.task_id))
     task = task_result.scalar_one_or_none()
-    
+
     is_client = task and task.client_id == current_user.id
     is_worker = subtask.claimed_by == current_user.id
     is_collaborator = subtask.collaborators and current_user.id in subtask.collaborators
-    
+
     if not (is_client or is_worker or is_collaborator or current_user.is_admin):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to dispute this subtask",
         )
-    
+
     dispute = Dispute(
         subtask_id=subtask_id,
         raised_by=current_user.id,
@@ -550,12 +593,281 @@ async def create_dispute(
         status="open",
     )
     db.add(dispute)
-    
+
     subtask.status = "disputed"
     if task:
         task.status = "disputed"
-    
+
     await db.flush()
     await db.refresh(dispute)
-    
+
     return DisputeResponse.model_validate(dispute)
+
+
+# ============ Admin/Client CRUD Endpoints ============
+
+@router.post("", response_model=SubtaskResponse, status_code=status.HTTP_201_CREATED)
+async def create_subtask(
+    subtask_data: SubtaskCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> SubtaskResponse:
+    """
+    Create a new subtask for a task.
+    Only the task owner or admin can create subtasks.
+
+    Args:
+        subtask_data: The subtask data
+        db: Database session
+        current_user: The authenticated user
+
+    Returns:
+        The created subtask
+    """
+    # Get the parent task
+    task_result = await db.execute(select(Task).where(Task.id == subtask_data.task_id))
+    task = task_result.scalar_one_or_none()
+
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
+
+    # Check authorization - only task owner or admin
+    if task.client_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to add subtasks to this task",
+        )
+
+    # Validate task status - can only add subtasks to draft, funded, or decomposed tasks
+    if task.status not in ("draft", "funded", "decomposed"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot add subtasks to task in current status",
+        )
+
+    # Create the subtask
+    subtask = Subtask(
+        task_id=subtask_data.task_id,
+        title=subtask_data.title,
+        description=subtask_data.description,
+        description_html=subtask_data.description_html,
+        deliverables=[d.model_dump() for d in subtask_data.deliverables] if subtask_data.deliverables else None,
+        acceptance_criteria=subtask_data.acceptance_criteria,
+        references=[r.model_dump() for r in subtask_data.references] if subtask_data.references else None,
+        attachments=[a.model_dump() for a in subtask_data.attachments] if subtask_data.attachments else None,
+        example_output=subtask_data.example_output,
+        tools_required=subtask_data.tools_required,
+        estimated_hours=subtask_data.estimated_hours,
+        subtask_type=subtask_data.subtask_type,
+        sequence_order=subtask_data.sequence_order,
+        budget_allocation_percent=subtask_data.budget_allocation_percent,
+        budget_cngn=subtask_data.budget_cngn,
+        deadline=subtask_data.deadline,
+        status="open",
+    )
+    db.add(subtask)
+
+    # Update task status to decomposed if it was just funded
+    if task.status == "funded":
+        task.status = "decomposed"
+
+    await db.flush()
+    await db.refresh(subtask)
+
+    return SubtaskResponse.model_validate(subtask)
+
+
+@router.patch("/{subtask_id}", response_model=SubtaskResponse)
+async def update_subtask(
+    subtask_id: UUID,
+    subtask_data: SubtaskUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> SubtaskResponse:
+    """
+    Update a subtask.
+    Only the task owner or admin can update subtasks.
+    Can only update subtasks that are not yet claimed.
+
+    Args:
+        subtask_id: The subtask ID
+        subtask_data: The update data
+        db: Database session
+        current_user: The authenticated user
+
+    Returns:
+        The updated subtask
+    """
+    result = await db.execute(select(Subtask).where(Subtask.id == subtask_id))
+    subtask = result.scalar_one_or_none()
+
+    if subtask is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subtask not found",
+        )
+
+    # Get parent task for authorization
+    task_result = await db.execute(select(Task).where(Task.id == subtask.task_id))
+    task = task_result.scalar_one_or_none()
+
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
+
+    # Check authorization
+    if task.client_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to update this subtask",
+        )
+
+    # Check subtask status - can only update open subtasks (unless admin)
+    if subtask.status != "open" and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot update subtask that has been claimed or completed",
+        )
+
+    # Apply updates
+    update_data = subtask_data.model_dump(exclude_unset=True)
+
+    # Handle nested objects specially
+    if "deliverables" in update_data and update_data["deliverables"] is not None:
+        update_data["deliverables"] = [d.model_dump() if hasattr(d, 'model_dump') else d for d in update_data["deliverables"]]
+    if "references" in update_data and update_data["references"] is not None:
+        update_data["references"] = [r.model_dump() if hasattr(r, 'model_dump') else r for r in update_data["references"]]
+    if "attachments" in update_data and update_data["attachments"] is not None:
+        update_data["attachments"] = [a.model_dump() if hasattr(a, 'model_dump') else a for a in update_data["attachments"]]
+
+    for key, value in update_data.items():
+        setattr(subtask, key, value)
+
+    await db.flush()
+    await db.refresh(subtask)
+
+    return SubtaskResponse.model_validate(subtask)
+
+
+@router.delete("/{subtask_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_subtask(
+    subtask_id: UUID,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> None:
+    """
+    Delete a subtask.
+    Only the task owner or admin can delete subtasks.
+    Can only delete subtasks that are not yet claimed.
+
+    Args:
+        subtask_id: The subtask ID
+        db: Database session
+        current_user: The authenticated user
+    """
+    result = await db.execute(select(Subtask).where(Subtask.id == subtask_id))
+    subtask = result.scalar_one_or_none()
+
+    if subtask is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subtask not found",
+        )
+
+    # Get parent task for authorization
+    task_result = await db.execute(select(Task).where(Task.id == subtask.task_id))
+    task = task_result.scalar_one_or_none()
+
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
+
+    # Check authorization
+    if task.client_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to delete this subtask",
+        )
+
+    # Check subtask status - can only delete open subtasks (unless admin)
+    if subtask.status != "open" and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete subtask that has been claimed or completed",
+        )
+
+    await db.delete(subtask)
+    await db.flush()
+
+
+class ReorderRequest(BaseModel):
+    """Request schema for reordering subtasks."""
+    subtask_ids: list[UUID] = Field(..., description="Ordered list of subtask IDs")
+
+
+@router.post("/reorder/{task_id}", response_model=list[SubtaskResponse])
+async def reorder_subtasks(
+    task_id: UUID,
+    reorder_data: ReorderRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> list[SubtaskResponse]:
+    """
+    Reorder subtasks within a task.
+    Only the task owner or admin can reorder subtasks.
+
+    Args:
+        task_id: The parent task ID
+        reorder_data: The new ordering of subtask IDs
+        db: Database session
+        current_user: The authenticated user
+
+    Returns:
+        The reordered subtasks
+    """
+    # Get the task
+    task_result = await db.execute(select(Task).where(Task.id == task_id))
+    task = task_result.scalar_one_or_none()
+
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
+
+    # Check authorization
+    if task.client_id != current_user.id and not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to reorder subtasks for this task",
+        )
+
+    # Get all subtasks for this task
+    subtasks_result = await db.execute(
+        select(Subtask).where(Subtask.task_id == task_id)
+    )
+    subtasks = {st.id: st for st in subtasks_result.scalars().all()}
+
+    # Validate that all provided IDs belong to this task
+    if set(reorder_data.subtask_ids) != set(subtasks.keys()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Subtask IDs must match exactly the subtasks belonging to this task",
+        )
+
+    # Update sequence_order for each subtask
+    for idx, subtask_id in enumerate(reorder_data.subtask_ids, start=1):
+        subtasks[subtask_id].sequence_order = idx
+
+    await db.flush()
+
+    # Return subtasks in new order
+    ordered_subtasks = [subtasks[sid] for sid in reorder_data.subtask_ids]
+    return [SubtaskResponse.model_validate(st) for st in ordered_subtasks]

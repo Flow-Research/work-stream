@@ -63,7 +63,7 @@ class Task(Base):
         ARRAY(Text),
         nullable=True,
     )
-    deadline: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deadline: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -75,8 +75,8 @@ class Task(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
-    funded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    funded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
     # Relationships
     client: Mapped["User"] = relationship("User", foreign_keys=[client_id])

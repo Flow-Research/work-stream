@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import axios from 'axios'
 import { authService, taskService, subtaskService } from './api'
 
 vi.mock('axios', () => {
-  const mockAxios = {
+  const mockAxios: Record<string, unknown> = {
     create: vi.fn(() => mockAxios),
     get: vi.fn(),
     post: vi.fn(),

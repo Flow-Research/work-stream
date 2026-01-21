@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { taskService } from '../services/api'
@@ -11,6 +11,10 @@ interface Subtask {
   estimated_hours: number
   acceptance_criteria?: string[]
   deliverables?: Array<{ title: string; type: string; required: boolean }>
+}
+
+interface EditableSubtask extends Subtask {
+  isEditing?: boolean
 }
 
 interface DecomposeTaskModalProps {
@@ -47,8 +51,9 @@ export default function DecomposeTaskModal({
   onSuccess,
 }: DecomposeTaskModalProps) {
   const queryClient = useQueryClient()
-  const [subtasks, setSubtasks] = useState<Subtask[]>([])
+  const [subtasks, setSubtasks] = useState<EditableSubtask[]>([])
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
   const [hasGenerated, setHasGenerated] = useState(false)
 
   const decomposeMutation = useMutation({
@@ -63,9 +68,23 @@ export default function DecomposeTaskModal({
     },
   })
 
+  // Update a subtask field
+  const updateSubtask = useCallback((index: number, field: keyof Subtask, value: string | number | string[]) => {
+    setSubtasks(prev => prev.map((st, i) =>
+      i === index ? { ...st, [field]: value } : st
+    ))
+  }, [])
+
+  // Toggle edit mode for a subtask
+  const toggleEdit = useCallback((index: number) => {
+    setEditingIndex(prev => prev === index ? null : index)
+    setExpandedIndex(index)
+  }, [])
+
   const handleClose = () => {
     setSubtasks([])
     setExpandedIndex(null)
+    setEditingIndex(null)
     setHasGenerated(false)
     onClose()
   }
@@ -156,9 +175,10 @@ export default function DecomposeTaskModal({
                 {subtasks.map((subtask, index) => {
                   const colors = typeColors[subtask.subtask_type] || typeColors.discovery
                   const isExpanded = expandedIndex === index
-                  
+                  const isEditing = editingIndex === index
+
                   return (
-                    <div key={index} className="border border-gray-200 rounded-xl overflow-hidden">
+                    <div key={index} className={`border rounded-xl overflow-hidden ${isEditing ? 'border-primary-300 ring-2 ring-primary-100' : 'border-gray-200'}`}>
                       <div
                         className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
                         onClick={() => setExpandedIndex(isExpanded ? null : index)}
@@ -171,6 +191,11 @@ export default function DecomposeTaskModal({
                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}>
                                 {subtask.subtask_type}
                               </span>
+                              {isEditing && (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-700">
+                                  Editing
+                                </span>
+                              )}
                             </div>
                             <p className="text-sm text-gray-500 truncate mt-0.5">{subtask.description}</p>
                           </div>
@@ -186,34 +211,132 @@ export default function DecomposeTaskModal({
 
                       {isExpanded && (
                         <div className="px-4 pb-4 pt-2 border-t border-gray-100 bg-gray-50">
-                          <p className="text-sm text-gray-700 mb-3">{subtask.description}</p>
-                          
-                          {subtask.acceptance_criteria && subtask.acceptance_criteria.length > 0 && (
-                            <div className="mb-3">
-                              <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Acceptance Criteria</h5>
-                              <ul className="space-y-1">
-                                {subtask.acceptance_criteria.map((criterion, i) => (
-                                  <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                                    <span className="text-green-500 mt-0.5">✓</span>
-                                    {criterion}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
+                          {/* Edit Toggle Button */}
+                          <div className="flex justify-end mb-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                toggleEdit(index)
+                              }}
+                              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                                isEditing
+                                  ? 'bg-primary-500 text-white hover:bg-primary-600'
+                                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                              }`}
+                            >
+                              {isEditing ? '✓ Done Editing' : '✏️ Edit'}
+                            </button>
+                          </div>
 
-                          {subtask.deliverables && subtask.deliverables.length > 0 && (
-                            <div>
-                              <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deliverables</h5>
-                              <div className="flex flex-wrap gap-2">
-                                {subtask.deliverables.map((d, i) => (
-                                  <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs">
-                                    {d.title}
-                                    {d.required && <span className="text-red-500">*</span>}
-                                  </span>
-                                ))}
+                          {isEditing ? (
+                            /* Edit Mode */
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Title</label>
+                                <input
+                                  type="text"
+                                  value={subtask.title}
+                                  onChange={(e) => updateSubtask(index, 'title', e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                />
                               </div>
+
+                              <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Description</label>
+                                <textarea
+                                  value={subtask.description}
+                                  onChange={(e) => updateSubtask(index, 'description', e.target.value)}
+                                  rows={3}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Budget (CNGN)</label>
+                                  <input
+                                    type="number"
+                                    value={subtask.budget_cngn}
+                                    onChange={(e) => updateSubtask(index, 'budget_cngn', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Est. Hours</label>
+                                  <input
+                                    type="number"
+                                    value={subtask.estimated_hours}
+                                    onChange={(e) => updateSubtask(index, 'estimated_hours', parseFloat(e.target.value) || 0)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                                  Subtask Type
+                                </label>
+                                <select
+                                  value={subtask.subtask_type}
+                                  onChange={(e) => updateSubtask(index, 'subtask_type', e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                >
+                                  <option value="discovery">🔍 Discovery</option>
+                                  <option value="extraction">⛏️ Extraction</option>
+                                  <option value="mapping">🗺️ Mapping</option>
+                                  <option value="assembly">🔧 Assembly</option>
+                                  <option value="narrative">✍️ Narrative</option>
+                                </select>
+                              </div>
+
+                              {subtask.acceptance_criteria && (
+                                <div>
+                                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                                    Acceptance Criteria (one per line)
+                                  </label>
+                                  <textarea
+                                    value={subtask.acceptance_criteria.join('\n')}
+                                    onChange={(e) => updateSubtask(index, 'acceptance_criteria', e.target.value.split('\n').filter(c => c.trim()))}
+                                    rows={3}
+                                    placeholder="Each line becomes a criterion"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                                  />
+                                </div>
+                              )}
                             </div>
+                          ) : (
+                            /* View Mode */
+                            <>
+                              <p className="text-sm text-gray-700 mb-3">{subtask.description}</p>
+
+                              {subtask.acceptance_criteria && subtask.acceptance_criteria.length > 0 && (
+                                <div className="mb-3">
+                                  <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Acceptance Criteria</h5>
+                                  <ul className="space-y-1">
+                                    {subtask.acceptance_criteria.map((criterion, i) => (
+                                      <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                                        <span className="text-green-500 mt-0.5">✓</span>
+                                        {criterion}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {subtask.deliverables && subtask.deliverables.length > 0 && (
+                                <div>
+                                  <h5 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Deliverables</h5>
+                                  <div className="flex flex-wrap gap-2">
+                                    {subtask.deliverables.map((d, i) => (
+                                      <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs">
+                                        {d.title}
+                                        {d.required && <span className="text-red-500">*</span>}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
