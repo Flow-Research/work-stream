@@ -98,17 +98,19 @@ class SubtaskRejectRequest(BaseModel):
 
 class SubtaskResponse(BaseModel):
     """Response schema for subtask data."""
-    
+
     id: UUID
     task_id: UUID
-    
+
     title: str
     description: str
     description_html: Optional[str] = None
-    deliverables: Optional[list[DeliverableItem]] = None
+    # Flexible JSONB storage - can be structured DeliverableItems or freeform dict
+    deliverables: Optional[dict] = None
     acceptance_criteria: Optional[list[str]] = None
-    references: Optional[list[ReferenceItem]] = None
-    attachments: Optional[list[AttachmentItem]] = None
+    # Flexible JSONB storage - can be structured ReferenceItems or freeform dict
+    references: Optional[dict] = None
+    attachments: Optional[dict] = None
     example_output: Optional[str] = None
     tools_required: Optional[list[str]] = None
     estimated_hours: Optional[Decimal] = None
