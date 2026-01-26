@@ -9,7 +9,7 @@ import ReviewModal from '../components/ReviewModal'
 import FundTaskButton from '../components/FundTaskButton'
 import DecomposeTaskModal from '../components/DecomposeTaskModal'
 import CountdownTimer, { InlineCountdown } from '../components/CountdownTimer'
-import type { SubtaskBrief, SubtaskStatus, SubtaskType, ReferenceItem, Subtask, DeliverableItem } from '../types'
+import type { SubtaskBrief, SubtaskStatus, SubtaskType, ReferenceItem, Subtask, DeliverableItem, TaskStatus, Task } from '../types'
 
 const subtaskTypeLabels: Record<SubtaskType, string> = {
   discovery: 'Discovery',
@@ -17,6 +17,27 @@ const subtaskTypeLabels: Record<SubtaskType, string> = {
   mapping: 'Mapping',
   assembly: 'Assembly',
   narrative: 'Narrative',
+}
+
+const taskStatusLabels: Record<TaskStatus, string> = {
+  draft: 'Pending',
+  funded: 'Funded',
+  decomposed: 'Decomposed',
+  in_progress: 'In Progress',
+  in_review: 'In Review',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  disputed: 'Disputed',
+}
+
+const subtaskStatusLabels: Record<SubtaskStatus, string> = {
+  open: 'Open',
+  claimed: 'Claimed',
+  in_progress: 'In Progress',
+  submitted: 'Submitted',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  disputed: 'Disputed',
 }
 
 
@@ -50,7 +71,7 @@ export default function TaskDetail() {
   })
   const [showDecomposeModal, setShowDecomposeModal] = useState(false)
 
-  const { data: task, isLoading, error } = useQuery({
+  const { data: task, isLoading, error } = useQuery<Task>({
     queryKey: ['task', taskId],
     queryFn: () => taskService.get(taskId!),
     enabled: !!taskId,
@@ -143,7 +164,7 @@ export default function TaskDetail() {
               <div className="flex items-center gap-3 flex-wrap">
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${status.bg} ${status.text}`}>
                   <span className={`w-2 h-2 rounded-full ${status.dot}`}></span>
-                  {task.status.replace('_', ' ')}
+                  {taskStatusLabels[task.status]}
                 </span>
                 {task.skills_required?.map((skill: string) => (
                   <span key={skill} className="px-3 py-1 rounded-full text-sm font-medium bg-white/20 text-white">
@@ -390,7 +411,7 @@ export default function TaskDetail() {
                             <h3 className="font-semibold text-gray-900 truncate">{subtask.title}</h3>
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`}></span>
-                              {subtask.status.replace('_', ' ')}
+                              {subtaskStatusLabels[subtask.status]}
                             </span>
                           </div>
                           <p className="text-sm text-gray-500 mt-0.5">{subtaskTypeLabels[subtask.subtask_type]}</p>

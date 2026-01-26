@@ -18,7 +18,7 @@ const statusColors: Record<TaskStatus, string> = {
 }
 
 const statusLabels: Record<TaskStatus, string> = {
-  draft: 'Draft',
+  draft: 'Pending',
   funded: 'Funded',
   decomposed: 'Decomposed',
   in_progress: 'In Progress',
@@ -30,11 +30,30 @@ const statusLabels: Record<TaskStatus, string> = {
 
 export default function Tasks() {
   const { user } = useAuthStore()
-  const [statusFilter, setStatusFilter] = useState<string>('')
+
+  // Initialize status filter from URL params
+  const searchParams = new URLSearchParams(window.location.search)
+  const [statusFilter, setStatusFilter] = useState<string>(
+    searchParams.get('status') || ''
+  )
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [debouncedSearch, setDebouncedSearch] = useState<string>('')
   const [page, setPage] = useState(1)
   const [showCreateModal, setShowCreateModal] = useState(false)
+
+  // Handle status filter change with URL sync
+  const handleStatusChange = (status: string) => {
+    setStatusFilter(status)
+    setPage(1) // Reset to first page when filter changes
+
+    const url = new URL(window.location.href)
+    if (status) {
+      url.searchParams.set('status', status)
+    } else {
+      url.searchParams.delete('status')
+    }
+    window.history.replaceState({}, '', url.toString())
+  }
 
   // Debounce search input
   useEffect(() => {
@@ -114,14 +133,18 @@ export default function Tasks() {
 
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => handleStatusChange(e.target.value)}
             className="input w-48"
           >
             <option value="">All Status</option>
-            <option value="draft">Draft</option>
+            <option value="draft">Pending</option>
             <option value="funded">Funded</option>
+            <option value="decomposed">Decomposed</option>
             <option value="in_progress">In Progress</option>
+            <option value="in_review">In Review</option>
             <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="disputed">Disputed</option>
           </select>
 
           {user?.is_admin && (
