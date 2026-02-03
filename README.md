@@ -1,4 +1,4 @@
-# Flow - Decentralized Research Synthesis Platform
+# Flow - Research Synthesis Platform
 
 Flow enables knowledge workers to earn by contributing to AI-assisted academic research synthesis. Workers verify AI outputs, add expertise, and build artifacts (datasets, knowledge graphs) that generate recurring revenue through licensing.
 
